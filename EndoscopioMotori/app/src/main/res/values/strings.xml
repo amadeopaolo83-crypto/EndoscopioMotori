@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Endoscopio Motori</string>
+    <string name="hint_note">Nota / motore (facoltativo)</string>
+    <string name="btn_photo">FOTO</string>
+    <string name="btn_rec">REC</string>
+    <string name="btn_stop">STOP</string>
+    <string name="btn_gallery">GALLERIA</string>
+    <string name="label_brightness">Luminosità</string>
+
+    <string name="status_connect">Collega la sonda USB-C</string>
+    <string name="status_permission">Conferma il permesso USB sul telefono…</string>
+    <string name="err_usb_denied">Permesso USB negato.\nTocca qui per riprovare</string>
+    <string name="err_busy">Camera occupata o non risponde.\nChiudi altre app che usano la sonda, poi tocca qui per riprovare</string>
+    <string name="err_camera_perm">Serve il permesso Fotocamera per usare la sonda.\nTocca qui per aprire le impostazioni dell\'app</string>
+    <string name="msg_disconnected">Sonda scollegata</string>
+    <string name="msg_not_ready">Sonda non pronta</string>
+    <string name="msg_photo_saved">Foto salvata: %1$s</string>
+    <string name="msg_video_saved">Video salvato: %1$s</string>
+    <string name="msg_save_error">Errore nel salvataggio</string>
+    <string name="msg_photo_error">Errore foto: %1$s</string>
+    <string name="msg_rec_error">Errore registrazione: %1$s</string>
+    <string name="msg_rec_lost">Registrazione interrotta: sonda scollegata</string>
+    <string name="msg_probe_button">Tasto sonda premuto</string>
+
+    <string name="key_uvc_listening">Tasto sonda: in ascolto (UVC). Prova a premerlo.</string>
+    <string name="key_only_keyboard">Tasto sonda: solo come tasto tastiera. Prova a premerlo.</string>
+    <string name="key_last">Ultimo tasto ricevuto: %1$s</string>
+
+    <string name="gallery_title">Ispezioni Motori</string>
+    <string name="gallery_empty">Nessuna foto o video</string>
+    <string name="back">← INDIETRO</string>
+    <string name="action_open">Apri</string>
+    <string name="action_share">Condividi</string>
+    <string name="action_delete">Elimina</string>
+    <string name="confirm_delete">Eliminare questo file?</string>
+    <string name="yes">Sì, elimina</string>
+    <string name="cancel">Annulla</string>
+    <string name="msg_deleted">Eliminato</string>
+    <string name="msg_delete_error">Impossibile eliminare</string>
+    <string name="msg_no_app">Nessuna app per aprire il file</string>
+</resources>
