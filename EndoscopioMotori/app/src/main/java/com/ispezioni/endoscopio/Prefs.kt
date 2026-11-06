@@ -14,6 +14,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("mirror", false)
         set(v) = sp.edit().putBoolean("mirror", v).apply()
 
+    /** "" = predefinita della libreria, altrimenti "LxA" (es. 1280x720). */
+    var resolution: String
+        get() = sp.getString("resolution", "") ?: ""
+        set(v) = sp.edit().putString("resolution", v).apply()
+
     var note: String
         get() = sp.getString("note", "") ?: ""
         set(v) = sp.edit().putString("note", v).apply()

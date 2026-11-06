@@ -7,6 +7,10 @@
     <string name="btn_stop">STOP</string>
     <string name="btn_gallery">GALLERIA</string>
     <string name="label_brightness">Luminosità</string>
+    <string name="res_button">Risoluzione ▾</string>
+    <string name="res_title">Risoluzione (foto e video)</string>
+    <string name="res_auto">Automatica (predefinita)</string>
+    <string name="msg_res_busy">Ferma prima la registrazione</string>
 
     <string name="status_connect">Collega la sonda USB-C</string>
     <string name="status_permission">Conferma il permesso USB sul telefono…</string>

@@ -115,15 +115,37 @@
         android:background="@color/panel"
         android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/lastKeyText"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
             android:paddingStart="12dp"
             android:paddingTop="4dp"
-            android:paddingEnd="12dp"
-            android:textColor="@color/hint"
-            android:textSize="12sp" />
+            android:paddingEnd="8dp">
+
+            <TextView
+                android:id="@+id/lastKeyText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="@color/hint"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btnRes"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/bg_btn_dark"
+                android:minWidth="120dp"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:text="@string/res_button"
+                android:textAllCaps="false"
+                android:textColor="@color/white"
+                android:textSize="14sp" />
+        </LinearLayout>
 
         <LinearLayout
             android:id="@+id/brightnessRow"
@@ -161,11 +183,14 @@
                 android:layout_width="0dp"
                 android:layout_height="88dp"
                 android:layout_margin="4dp"
-                android:layout_weight="1"
+                android:layout_weight="1.3"
                 android:background="@drawable/bg_btn_dark"
+                android:maxLines="1"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
                 android:text="@string/btn_gallery"
                 android:textColor="@color/white"
-                android:textSize="15sp"
+                android:textSize="13sp"
                 android:textStyle="bold" />
 
             <Button

@@ -52,6 +52,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var brightnessRow: View
     private lateinit var brightnessSeek: SeekBar
     private lateinit var flashView: View
+    private lateinit var btnRes: Button
+    private var pendingDefault = false
 
     private var helper: CameraHelper? = null
     private var surfaceTexture: SurfaceTexture? = null
@@ -106,6 +108,8 @@ class MainActivity : AppCompatActivity() {
         brightnessRow = findViewById(R.id.brightnessRow)
         brightnessSeek = findViewById(R.id.brightnessSeek)
         flashView = findViewById(R.id.flashView)
+        btnRes = findViewById(R.id.btnRes)
+        btnRes.setOnClickListener { showResolutionDialog() }
 
         noteInput.setText(prefs.note)
         noteInput.doAfterTextChanged { prefs.note = it?.toString() ?: "" }
@@ -296,7 +300,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         override fun onDeviceOpen(device: UsbDevice?, isFirstOpen: Boolean) {
-            openCameraMaxRes()
+            openCameraPreferred()
         }
 
         override fun onCameraOpen(device: UsbDevice?) {
@@ -323,20 +327,61 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun bestSize(h: CameraHelper): Size? = try {
-        h.supportedSizeList?.maxByOrNull { it.width.toLong() * it.height }
+    /** Elenco risoluzioni senza doppioni, dalla più grande. */
+    private fun sizeList(h: CameraHelper): List<Size> = try {
+        (h.supportedSizeList ?: emptyList<Size>())
+            .distinctBy { it.width to it.height }
+            .sortedByDescending { it.width.toLong() * it.height }
     } catch (e: Exception) {
-        null
+        emptyList()
     }
 
-    private fun openCameraMaxRes() {
+    /** Apre alla risoluzione scelta dall'utente; se non c'è, alla predefinita della libreria. */
+    private fun openCameraPreferred() {
         val h = helper ?: return
         try {
-            val best = bestSize(h)
-            if (best != null) h.openCamera(best) else h.openCamera()
+            val saved = prefs.resolution
+            val chosen = if (saved.isEmpty()) null
+            else sizeList(h).firstOrNull { "${it.width}x${it.height}" == saved }
+            if (chosen != null) h.openCamera(chosen) else h.openCamera()
         } catch (e: Exception) {
             showStatus(R.string.err_busy) { retryConnect() }
         }
+    }
+
+    private fun showResolutionDialog() {
+        val h = helper
+        if (h == null || !cameraOpened) {
+            Toast.makeText(this, R.string.msg_not_ready, Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (recording) {
+            Toast.makeText(this, R.string.msg_res_busy, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val sizes = sizeList(h)
+        val labels = ArrayList<String>()
+        labels.add(getString(R.string.res_auto))
+        sizes.forEach { labels.add("${it.width} x ${it.height}") }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(R.string.res_title)
+            .setItems(labels.toTypedArray()) { _, which ->
+                if (which == 0) {
+                    prefs.resolution = ""
+                    pendingDefault = true
+                } else {
+                    val s = sizes[which - 1]
+                    prefs.resolution = "${s.width}x${s.height}"
+                    pendingReopen = s
+                }
+                try {
+                    h.closeCamera()
+                } catch (e: Exception) {
+                    pendingReopen = null
+                    pendingDefault = false
+                }
+            }
+            .show()
     }
 
     private fun onCameraOpened() {
@@ -349,24 +394,10 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             null
         }
-        // se la camera si è aperta a una risoluzione più bassa del massimo, riapri al massimo
-        val best = bestSize(h)
-        if (!reopenTried && cur != null && best != null &&
-            best.width.toLong() * best.height > cur.width.toLong() * cur.height
-        ) {
-            reopenTried = true
-            pendingReopen = best
-            try {
-                h.closeCamera()
-            } catch (e: Exception) {
-                pendingReopen = null
-            }
-            if (pendingReopen != null) return
-        }
-
         if (cur != null) {
             previewW = cur.width
             previewH = cur.height
+            btnRes.text = "${cur.width}x${cur.height} ▾"
             layoutPreview()
         }
         try {
@@ -408,10 +439,11 @@ class MainActivity : AppCompatActivity() {
         cameraOpened = false
         surfaceAdded = false
         val p = pendingReopen
-        if (p != null) {
+        if (p != null || pendingDefault) {
             pendingReopen = null
+            pendingDefault = false
             try {
-                helper?.openCamera(p)
+                if (p != null) helper?.openCamera(p) else helper?.openCamera()
             } catch (e: Exception) {
                 showStatus(R.string.err_busy) { retryConnect() }
             }
