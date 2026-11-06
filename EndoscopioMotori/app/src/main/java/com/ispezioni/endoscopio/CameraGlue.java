@@ -74,6 +74,9 @@ public final class CameraGlue {
     public static void startRecording(CameraHelper helper, File out, final Done done) {
         VideoCapture.OutputFileOptions options = new VideoCapture.OutputFileOptions.Builder(out).build();
         helper.startRecording(options, new VideoCapture.OnVideoCaptureCallback() {
+                        @Override
+            public void onStart() {
+            }
             @Override
             public void onVideoSaved(@NonNull VideoCapture.OutputFileResults results) {
                 done.ok();
