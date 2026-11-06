@@ -3,7 +3,6 @@ package com.ispezioni.endoscopio
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.SurfaceTexture
 import android.hardware.usb.UsbDevice
 import android.net.Uri
 import android.os.Build
@@ -17,7 +16,9 @@ import android.view.GestureDetector
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
-import android.view.TextureView
+import android.view.Surface
+import android.view.SurfaceHolder
+import android.view.SurfaceView
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
@@ -41,7 +42,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var prefs: Prefs
     private lateinit var container: FrameLayout
-    private lateinit var previewView: TextureView
+    private lateinit var previewView: SurfaceView
     private lateinit var statusText: TextView
     private lateinit var noteInput: EditText
     private lateinit var btnRotate: Button
@@ -53,10 +54,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var brightnessSeek: SeekBar
     private lateinit var flashView: View
     private lateinit var btnRes: Button
+    private lateinit var debugText: TextView
+    private val dbgLines = ArrayDeque<String>()
     private var pendingDefault = false
 
     private var helper: CameraHelper? = null
-    private var surfaceTexture: SurfaceTexture? = null
+    private var surface: Surface? = null
     private var surfaceAdded = false
     private var cameraOpened = false
     private var selectedDevice: UsbDevice? = null
@@ -109,6 +112,7 @@ class MainActivity : AppCompatActivity() {
         brightnessSeek = findViewById(R.id.brightnessSeek)
         flashView = findViewById(R.id.flashView)
         btnRes = findViewById(R.id.btnRes)
+        debugText = findViewById(R.id.debugText)
         btnRes.setOnClickListener { showResolutionDialog() }
 
         noteInput.setText(prefs.note)
@@ -150,28 +154,25 @@ class MainActivity : AppCompatActivity() {
             override fun onStopTrackingTouch(sb: SeekBar?) {}
         })
 
-        previewView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
-            override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) {
-                surfaceTexture = st
+        previewView.holder.addCallback(object : SurfaceHolder.Callback {
+            override fun surfaceCreated(holder: SurfaceHolder) {
+                surface = holder.surface
                 attachSurfaceIfReady()
             }
 
-            override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {}
+            override fun surfaceChanged(holder: SurfaceHolder, format: Int, w: Int, h: Int) {}
 
-            override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
+            override fun surfaceDestroyed(holder: SurfaceHolder) {
                 if (surfaceAdded) {
                     try {
-                        helper?.removeSurface(st)
+                        helper?.removeSurface(holder.surface)
                     } catch (_: Exception) {
                     }
                 }
                 surfaceAdded = false
-                surfaceTexture = null
-                return true
+                surface = null
             }
-
-            override fun onSurfaceTextureUpdated(st: SurfaceTexture) {}
-        }
+        })
         container.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> layoutPreview() }
 
         // Zoom digitale con pizzico; doppio tocco = azzera
@@ -296,29 +297,37 @@ class MainActivity : AppCompatActivity() {
 
     private val stateCallback = object : ICameraHelper.StateCallback {
         override fun onAttach(device: UsbDevice?) {
+            dbg("attach")
             if (device != null) requestDevice(device)
         }
 
         override fun onDeviceOpen(device: UsbDevice?, isFirstOpen: Boolean) {
+            dbg("deviceOpen")
             openCameraPreferred()
         }
 
         override fun onCameraOpen(device: UsbDevice?) {
+            dbg("cameraOpen")
             onCameraOpened()
         }
 
         override fun onCameraClose(device: UsbDevice?) {
+            dbg("cameraClose")
             onCameraClosed()
         }
 
-        override fun onDeviceClose(device: UsbDevice?) {}
+        override fun onDeviceClose(device: UsbDevice?) {
+            dbg("deviceClose")
+        }
 
         override fun onDetach(device: UsbDevice?) {
+            dbg("detach")
             onDetached()
         }
 
         override fun onCancel(device: UsbDevice?) {
             // permesso USB negato dall'utente
+            dbg("cancel")
             ui.removeCallbacks(openWatchdog)
             selectedDevice = null
             showStatus(R.string.err_usb_denied) {
@@ -343,10 +352,19 @@ class MainActivity : AppCompatActivity() {
             val saved = prefs.resolution
             val chosen = if (saved.isEmpty()) null
             else sizeList(h).firstOrNull { "${it.width}x${it.height}" == saved }
+            dbg(if (chosen != null) "open ${chosen.width}x${chosen.height}" else "open auto")
             if (chosen != null) h.openCamera(chosen) else h.openCamera()
         } catch (e: Exception) {
+            dbg("errore open: ${e.message}")
             showStatus(R.string.err_busy) { retryConnect() }
         }
+    }
+
+    /** Ultimi eventi della sonda, in giallo, per capire cosa succede. */
+    private fun dbg(s: String) {
+        dbgLines.addLast(s)
+        while (dbgLines.size > 5) dbgLines.removeFirst()
+        debugText.text = dbgLines.joinToString(" › ")
     }
 
     private fun showResolutionDialog() {
@@ -405,7 +423,6 @@ class MainActivity : AppCompatActivity() {
         } catch (_: Exception) {
         }
         attachSurfaceIfReady()
-        previewView.alpha = 1f
         hideStatus()
 
         // tasto fisico della sonda (evento UVC)
@@ -432,12 +449,16 @@ class MainActivity : AppCompatActivity() {
     private fun onCameraClosed() {
         if (surfaceAdded) {
             try {
-                surfaceTexture?.let { helper?.removeSurface(it) }
+                surface?.let { helper?.removeSurface(it) }
             } catch (_: Exception) {
             }
         }
         cameraOpened = false
         surfaceAdded = false
+        // chiusura non voluta (non è un cambio di risoluzione): avvisa
+        if (pendingReopen == null && !pendingDefault && selectedDevice != null && helper != null) {
+            showStatus(R.string.err_closed) { retryConnect() }
+        }
         val p = pendingReopen
         if (p != null || pendingDefault) {
             pendingReopen = null
@@ -466,18 +487,19 @@ class MainActivity : AppCompatActivity() {
         brightness = null
         brightnessRow.visibility = View.GONE
         previewW = 0
-        previewView.alpha = 0f
         showStatus(R.string.status_connect)
     }
 
     private fun attachSurfaceIfReady() {
-        val st = surfaceTexture ?: return
+        val sf = surface ?: return
         val h = helper ?: return
         if (cameraOpened && !surfaceAdded) {
             try {
-                h.addSurface(st, false)
+                h.addSurface(sf, false)
                 surfaceAdded = true
-            } catch (_: Exception) {
+                dbg("surface ok")
+            } catch (e: Exception) {
+                dbg("errore surface: ${e.message}")
             }
         }
     }

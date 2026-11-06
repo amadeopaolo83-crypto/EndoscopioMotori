@@ -12,7 +12,7 @@
         android:layout_height="match_parent"
         android:clipChildren="true">
 
-        <TextureView
+        <SurfaceView
             android:id="@+id/previewView"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
@@ -114,6 +114,17 @@
         android:layout_gravity="bottom"
         android:background="@color/panel"
         android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/debugText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:maxLines="3"
+            android:paddingStart="12dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="12dp"
+            android:textColor="#FFFFEB3B"
+            android:textSize="11sp" />
 
         <LinearLayout
             android:layout_width="match_parent"
