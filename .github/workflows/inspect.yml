@@ -5,28 +5,14 @@ jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: Versioni disponibili
-        run: curl -s https://jitpack.io/api/builds/com.github.jiangdongguo/AndroidUSBCamera | head -c 3000
-      - name: Scarica libreria
+      - name: API
         run: |
-          for V in 3.3.3 3.3.2 3.2.9 3.2.7; do
-            echo "== provo $V"
-            curl -sfL -o lib.aar https://jitpack.io/com/github/jiangdongguo/AndroidUSBCamera/libausbc/$V/libausbc-$V.aar && echo "OK $V" && echo $V > ver.txt && break
+          V=3.3.3
+          curl -sfL -o lib.aar https://jitpack.io/com/github/jiangdongguo/AndroidUSBCamera/libausbc/$V/libausbc-$V.aar
+          mkdir aar && cd aar && unzip -q ../lib.aar && unzip -o -q classes.jar -d cls
+          for n in com.jiangdg.ausbc.MultiCameraClient 'com.jiangdg.ausbc.MultiCameraClient$ICamera' com.jiangdg.ausbc.MultiCameraClient\$Companion com.jiangdg.ausbc.camera.CameraUVC com.jiangdg.ausbc.camera.bean.CameraRequest 'com.jiangdg.ausbc.camera.bean.CameraRequest$Builder' com.jiangdg.ausbc.camera.bean.PreviewSize com.jiangdg.ausbc.callback.IDeviceConnectCallBack com.jiangdg.ausbc.callback.ICameraStateCallBack 'com.jiangdg.ausbc.callback.ICameraStateCallBack$State' com.jiangdg.ausbc.callback.ICaptureCallBack com.jiangdg.ausbc.callback.IPreviewDataCallBack com.jiangdg.ausbc.widget.AspectRatioSurfaceView com.jiangdg.ausbc.widget.IAspectRatio com.jiangdg.ausbc.camera.bean.CameraUvcInfo; do
+            echo "=== $n"; javap -public -cp cls "$n" 2>&1 | head -120
           done
-          ls -la
-          V=$(cat ver.txt); curl -sfL -o src.jar https://jitpack.io/com/github/jiangdongguo/AndroidUSBCamera/libausbc/$V/libausbc-$V-sources.jar && echo "sources ok" || echo "no sources"
-          curl -sfL https://jitpack.io/com/github/jiangdongguo/AndroidUSBCamera/libausbc/$V/libausbc-$V.pom | head -80
-      - name: Contenuto
-        run: |
-          mkdir aar && cd aar && unzip -q ../lib.aar && ls -R . | head -80
-          cat AndroidManifest.xml
-          unzip -o -q classes.jar -d cls && find cls -name '*.class' | head -150
-      - name: Sorgenti principali
-        run: |
-          mkdir s && cd s && unzip -q ../src.jar 2>/dev/null; find . -name '*.kt' -o -name '*.java' | head -100
-      - name: API pubbliche
-        run: |
-          cd aar
-          for c in $(find cls -name 'CameraFragment*.class' -o -name 'CameraActivity*.class' -o -name 'CameraRequest*.class' -o -name 'ICameraStateCallBack*.class' -o -name 'ICaptureCallBack*.class' -o -name 'MultiCameraClient*.class' -o -name 'CameraUVC*.class' | grep -v '\$[0-9]' | head -30); do
-            n=$(echo $c | sed 's#cls/##; s#\.class##; s#/#.#g'); echo "=== $n"; javap -public -cp cls "$n" 2>/dev/null | head -80
-          done
+          echo "=== libuvc deps"
+          curl -sfL https://jitpack.io/com/github/jiangdongguo/AndroidUSBCamera/libuvc/$V/libuvc-$V.pom | grep -E "artifactId|version" | head
+          curl -sfL -o uvc.aar https://jitpack.io/com/github/jiangdongguo/AndroidUSBCamera/libuvc/$V/libuvc-$V.aar && mkdir u && cd u && unzip -q ../uvc.aar && ls -R . | head -40
