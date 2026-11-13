@@ -8,7 +8,13 @@ jobs:
       - name: Contenuto
         shell: bash {0}
         run: |
-          B=https://jitpack.io/com/github/jiangdongguo/AndroidUSBCamera
-          curl -sfL -o a.aar $B/libausbc/3.3.3/libausbc-3.3.3.aar; unzip -l a.aar | grep -E "\.so|classes" ; unzip -q -o a.aar classes.jar -d a; unzip -l a/classes.jar | grep -c "com/jiangdg/usb/"
-          curl -sfL -o n.aar $B/libnative/3.3.3/libnative-3.3.3.aar; unzip -l n.aar | grep -E "\.so|classes"; unzip -q -o n.aar classes.jar -d n; unzip -l n/classes.jar | grep -c "com/jiangdg/usb/"
-          for v in 3.3.2 3.3.1 3.3.0 3.2.10; do echo "== $v"; for m in libausbc libuvc libnative; do curl -s -o /dev/null -w "$m %{http_code}\n" $B/$m/$v/$m-$v.pom; done; done
+          B=https://jitpack.io/com/github/jiangdongguo/AndroidUSBCamera; V=3.2.10
+          curl -sfL $B/libausbc/$V/libausbc-$V.pom | grep -E "artifactId|<version>"
+          curl -sfL $B/libnative/$V/libnative-$V.pom | grep -E "artifactId|<version>"
+          curl -sfL -o a.aar $B/libausbc/$V/libausbc-$V.aar; unzip -l a.aar | grep -E "\.so"; unzip -q -o a.aar classes.jar -d a
+          curl -sfL -o n.aar $B/libnative/$V/libnative-$V.aar; unzip -l n.aar | grep -E "\.so"; unzip -q -o n.aar classes.jar -d n
+          echo "USBMonitor in: a=$(unzip -l a/classes.jar | grep -c 'jiangdg/usb/USBMonitor') n=$(unzip -l n/classes.jar | grep -c 'jiangdg/usb/USBMonitor')"
+          unzip -l a/classes.jar | awk '{print $4}' | grep -E "^com/jiangdg/ausbc/(camera/|callback/|widget/|utils/|[A-Z])" | grep -v '\$' | head -60
+          for n in com.jiangdg.ausbc.camera.CameraUvcStrategy com.jiangdg.ausbc.camera.CameraClient 'com.jiangdg.ausbc.camera.CameraClient$Builder' com.jiangdg.ausbc.camera.bean.CameraRequest 'com.jiangdg.ausbc.camera.bean.CameraRequest$Builder' com.jiangdg.ausbc.camera.bean.PreviewSize com.jiangdg.ausbc.callback.IDeviceConnectCallBack com.jiangdg.ausbc.callback.ICameraStateCallBack com.jiangdg.ausbc.callback.ICaptureCallBack com.jiangdg.ausbc.callback.IPreviewDataCallBack com.jiangdg.ausbc.widget.AspectRatioSurfaceView com.jiangdg.ausbc.camera.ICameraStrategy 'com.jiangdg.ausbc.camera.ICameraStrategy$OnPreviewFrameListener'; do
+            echo "=== $n"; javap -public -cp a/classes.jar "$n" 2>&1 | head -90
+          done
