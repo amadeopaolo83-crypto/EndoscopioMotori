@@ -461,7 +461,55 @@ class MainActivity : AppCompatActivity() {
                 retryConnect()
             }
             .setNegativeButton(R.string.cancel, null)
+            .setNeutralButton("Analisi USB") { _, _ -> dumpUsb() }
             .show()
+    }
+
+    /** Legge come la sonda si presenta sull'USB (interfacce, canali, descrittori) e lo salva in Download. */
+    private fun dumpUsb() {
+        Thread {
+            val sb = StringBuilder()
+            try {
+                val um = getSystemService(android.content.Context.USB_SERVICE) as android.hardware.usb.UsbManager
+                val dev = selectedDevice ?: um.deviceList.values.firstOrNull()
+                if (dev == null) {
+                    runOnUiThread { Toast.makeText(this, "Nessuna sonda USB collegata", Toast.LENGTH_LONG).show() }
+                    return@Thread
+                }
+                sb.append("VID=%04X PID=%04X class=%d sub=%d proto=%d\n".format(dev.vendorId, dev.productId, dev.deviceClass, dev.deviceSubclass, dev.deviceProtocol))
+                sb.append("nome=").append(dev.productName).append(" prod=").append(dev.manufacturerName).append('\n')
+                sb.append("permesso=").append(um.hasPermission(dev)).append('\n')
+                for (i in 0 until dev.interfaceCount) {
+                    val f = dev.getInterface(i)
+                    sb.append("IF id=%d alt=%d class=%d sub=%d proto=%d ep=%d\n".format(f.id, f.alternateSetting, f.interfaceClass, f.interfaceSubclass, f.interfaceProtocol, f.endpointCount))
+                    for (e in 0 until f.endpointCount) {
+                        val ep = f.getEndpoint(e)
+                        sb.append("   EP addr=0x%02X type=%d maxPacket=%d interval=%d dir=%d\n".format(ep.address, ep.type, ep.maxPacketSize, ep.interval, ep.direction))
+                    }
+                }
+                val c = um.openDevice(dev)
+                if (c != null) {
+                    val raw = c.rawDescriptors
+                    sb.append("RAW ").append(raw.size).append(" byte\n")
+                    sb.append(raw.joinToString("") { "%02x".format(it) }).append('\n')
+                    c.close()
+                } else sb.append("openDevice: null\n")
+            } catch (t: Throwable) {
+                sb.append("errore ").append(t.javaClass.simpleName).append(": ").append(t.message).append('\n')
+            }
+            try {
+                val cv = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "usb_descrittori.txt")
+                    put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+                    put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "Download")
+                }
+                val uri = contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv)
+                if (uri != null) contentResolver.openOutputStream(uri)?.use { it.write(sb.toString().toByteArray()) }
+                runOnUiThread { Toast.makeText(this, "Salvato in Download: usb_descrittori.txt", Toast.LENGTH_LONG).show() }
+            } catch (t: Throwable) {
+                runOnUiThread { Toast.makeText(this, "Errore: ${t.message}", Toast.LENGTH_LONG).show() }
+            }
+        }.start()
     }
 
     /** Ultimi eventi della sonda, in giallo, per capire cosa succede. */
