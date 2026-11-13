@@ -19,6 +19,23 @@ class Prefs(context: Context) {
         get() = sp.getString("resolution", "") ?: ""
         set(v) = sp.edit().putString("resolution", v).apply()
 
+    // Interruttori di diagnosi (tutti spenti = comportamento identico all'app demo della libreria)
+    var optButton: Boolean
+        get() = sp.getBoolean("optButton", false)
+        set(v) = sp.edit().putBoolean("optButton", v).apply()
+
+    var optBrightness: Boolean
+        get() = sp.getBoolean("optBrightness", false)
+        set(v) = sp.edit().putBoolean("optBrightness", v).apply()
+
+    var optConfig: Boolean
+        get() = sp.getBoolean("optConfig", false)
+        set(v) = sp.edit().putBoolean("optConfig", v).apply()
+
+    var optFit: Boolean
+        get() = sp.getBoolean("optFit", false)
+        set(v) = sp.edit().putBoolean("optFit", v).apply()
+
     var note: String
         get() = sp.getString("note", "") ?: ""
         set(v) = sp.edit().putString("note", v).apply()

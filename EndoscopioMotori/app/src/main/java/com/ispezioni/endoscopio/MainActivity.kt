@@ -114,6 +114,7 @@ class MainActivity : AppCompatActivity() {
         btnRes = findViewById(R.id.btnRes)
         debugText = findViewById(R.id.debugText)
         btnRes.setOnClickListener { showResolutionDialog() }
+        debugText.setOnClickListener { showDiagnostics() }
 
         noteInput.setText(prefs.note)
         noteInput.doAfterTextChanged { prefs.note = it?.toString() ?: "" }
@@ -246,7 +247,7 @@ class MainActivity : AppCompatActivity() {
         if (helper != null) return
         val h = CameraHelper()
         // senza permesso microfono la registrazione parte comunque, ma senza audio
-        CameraGlue.configure(h, granted(Manifest.permission.RECORD_AUDIO))
+        if (prefs.optConfig) CameraGlue.configure(h, granted(Manifest.permission.RECORD_AUDIO))
         h.setStateCallback(stateCallback)
         helper = h
         reopenTried = false
@@ -360,6 +361,31 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Tocca la riga gialla: interruttori per trovare cosa disturba l'anteprima. */
+    private fun showDiagnostics() {
+        if (recording) return
+        val labels = arrayOf(
+            "Tasto sonda UVC",
+            "Slider luminosità",
+            "Config foto/video (JPG max, audio)",
+            "Anteprima adattata (ruota, specchio, zoom)"
+        )
+        val checked = booleanArrayOf(prefs.optButton, prefs.optBrightness, prefs.optConfig, prefs.optFit)
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Prove diagnostiche")
+            .setMultiChoiceItems(labels, checked) { _, i, on -> checked[i] = on }
+            .setPositiveButton("Applica e riconnetti") { _, _ ->
+                prefs.optButton = checked[0]
+                prefs.optBrightness = checked[1]
+                prefs.optConfig = checked[2]
+                prefs.optFit = checked[3]
+                dbgLines.clear()
+                retryConnect()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
     /** Ultimi eventi della sonda, in giallo, per capire cosa succede. */
     private fun dbg(s: String) {
         dbgLines.addLast(s)
@@ -418,24 +444,31 @@ class MainActivity : AppCompatActivity() {
             btnRes.text = "${cur.width}x${cur.height} ▾"
             layoutPreview()
         }
+        dbg("preview ${previewW}x${previewH}")
         try {
             h.startPreview()
-        } catch (_: Exception) {
+            dbg("startPreview ok")
+        } catch (e: Exception) {
+            dbg("errore startPreview: ${e.message}")
         }
         attachSurfaceIfReady()
         hideStatus()
 
         // tasto fisico della sonda (evento UVC)
-        val btnOk = UvcExtras.registerButton(h) { _, state ->
+        val btnOk = prefs.optButton && UvcExtras.registerButton(h) { _, state ->
             if (state != 0) runOnUiThread {
                 Toast.makeText(this, R.string.msg_probe_button, Toast.LENGTH_SHORT).show()
                 takePhoto()
             }
         }
-        lastKeyText.text = getString(if (btnOk) R.string.key_uvc_listening else R.string.key_only_keyboard)
+        lastKeyText.text = when {
+            !prefs.optButton -> "Tasto sonda UVC: spento (prova)"
+            btnOk -> getString(R.string.key_uvc_listening)
+            else -> getString(R.string.key_only_keyboard)
+        }
 
         // slider luminosità, solo se la sonda espone il controllo UVC
-        brightness = UvcExtras.brightness(h)
+        brightness = if (prefs.optBrightness) UvcExtras.brightness(h) else null
         val b = brightness
         if (b != null) {
             brightnessSeek.max = b.max - b.min
@@ -512,18 +545,44 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun layoutPreview() {
+        if (!prefs.optFit) {
+            // modalità prova: superficie a tutto schermo, senza trasformazioni (come la demo)
+            val cur = previewView.layoutParams
+            val full = FrameLayout.LayoutParams.MATCH_PARENT
+            if (cur.width != full || cur.height != full) {
+                cur.width = full
+                cur.height = full
+                previewView.layoutParams = cur
+            }
+            applyTransform()
+            return
+        }
         val cw = container.width
         val ch = container.height
         if (cw == 0 || ch == 0 || previewW == 0 || previewH == 0) return
         val odd = prefs.rotation == 90 || prefs.rotation == 270
         val s = if (odd) min(cw.toFloat() / previewH, ch.toFloat() / previewW)
         else min(cw.toFloat() / previewW, ch.toFloat() / previewH)
-        val lp = FrameLayout.LayoutParams((previewW * s).toInt(), (previewH * s).toInt(), Gravity.CENTER)
-        previewView.layoutParams = lp
+        val vw = (previewW * s).toInt()
+        val vh = (previewH * s).toInt()
+        val lp = previewView.layoutParams as FrameLayout.LayoutParams
+        // niente nuovo layout se la misura non cambia (evita cicli continui di layout)
+        if (lp.width != vw || lp.height != vh || lp.gravity != Gravity.CENTER) {
+            lp.width = vw
+            lp.height = vh
+            lp.gravity = Gravity.CENTER
+            previewView.layoutParams = lp
+        }
         applyTransform()
     }
 
     private fun applyTransform() {
+        if (!prefs.optFit) {
+            previewView.rotation = 0f
+            previewView.scaleX = 1f
+            previewView.scaleY = 1f
+            return
+        }
         previewView.rotation = prefs.rotation.toFloat()
         previewView.scaleX = zoom * (if (prefs.mirror) -1f else 1f)
         previewView.scaleY = zoom
