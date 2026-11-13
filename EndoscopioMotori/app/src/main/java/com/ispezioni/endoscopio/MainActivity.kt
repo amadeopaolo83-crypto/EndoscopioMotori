@@ -3,6 +3,8 @@ package com.ispezioni.endoscopio
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.hardware.usb.UsbDevice
 import android.net.Uri
 import android.os.Build
@@ -25,6 +27,7 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
@@ -55,6 +58,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var flashView: View
     private lateinit var btnRes: Button
     private lateinit var debugText: TextView
+    private lateinit var frameView: ImageView
+    @Volatile private var frameBusy = false
+    private var lastDecode = 0L
+    private var lastInfo = 0L
     private val dbgLines = ArrayDeque<String>()
     private var pendingDefault = false
 
@@ -113,6 +120,7 @@ class MainActivity : AppCompatActivity() {
         flashView = findViewById(R.id.flashView)
         btnRes = findViewById(R.id.btnRes)
         debugText = findViewById(R.id.debugText)
+        frameView = findViewById(R.id.frameView)
         btnRes.setOnClickListener { showResolutionDialog() }
         debugText.setOnClickListener { showDiagnostics() }
 
@@ -477,6 +485,7 @@ class MainActivity : AppCompatActivity() {
         }
         attachSurfaceIfReady()
         hideStatus()
+        dbg("frame cb: " + FrameProbe.attach(h) { onRawFrame(it) })
 
         // tasto fisico della sonda (evento UVC)
         val btnOk = prefs.optButton && UvcExtras.registerButton(h) { _, state ->
@@ -503,7 +512,55 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Fotogramma grezzo: mostra cosa arriva (JPEG o YUYV) e, se leggibile, lo disegna da sé. */
+    private fun onRawFrame(buf: java.nio.ByteBuffer) {
+        val now = SystemClock.uptimeMillis()
+        if (frameBusy || now - lastDecode < 90) return
+        frameBusy = true
+        lastDecode = now
+        try {
+            val d = buf.duplicate()
+            val len = d.remaining()
+            val n = minOf(len, 8)
+            val head = ByteArray(n)
+            d.get(head)
+            d.rewind()
+            val w = previewW
+            val h = previewH
+            var bmp: Bitmap? = null
+            var kind = "?"
+            if (n >= 2 && head[0] == 0xFF.toByte() && head[1] == 0xD8.toByte()) {
+                val arr = ByteArray(len)
+                d.get(arr)
+                bmp = BitmapFactory.decodeByteArray(arr, 0, len)
+                kind = "JPEG"
+            } else if (w > 0 && h > 0 && len >= w * h * 2) {
+                val arr = ByteArray(w * h * 2)
+                d.get(arr)
+                val px = FrameProbe.yuyvToArgb(arr, w, h)
+                bmp = Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888)
+                kind = "YUYV"
+            }
+            val hex = head.joinToString(" ") { "%02X".format(it) }
+            val showInfo = now - lastInfo > 700
+            if (showInfo) lastInfo = now
+            val b = bmp
+            runOnUiThread {
+                if (showInfo) lastKeyText.text = "Frame $kind $len B · $hex"
+                if (b != null) {
+                    frameView.setImageBitmap(b)
+                    frameView.visibility = View.VISIBLE
+                }
+            }
+        } catch (t: Throwable) {
+            runOnUiThread { lastKeyText.text = "Frame errore: ${t.javaClass.simpleName}" }
+        } finally {
+            frameBusy = false
+        }
+    }
+
     private fun onCameraClosed() {
+        runOnUiThread { frameView.visibility = View.GONE }
         if (surfaceAdded) {
             try {
                 surface?.let { helper?.removeSurface(it) }
