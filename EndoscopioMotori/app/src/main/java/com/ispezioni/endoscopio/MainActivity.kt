@@ -680,7 +680,7 @@ class MainActivity : AppCompatActivity() {
                 while (j + 3 < n && src[j].toInt() == 0x54 && src[j + 1].toInt() == 0x59 &&
                     src[j + 2].toInt() == 0x54 && src[j + 3].toInt() == 0x4E
                 ) j += 4
-                if ((j - i) >= 32) {
+                if ((j - i) >= 4) {
                     miss += j - i // parte non inviata: si tiene la precedente
                 } else {
                     System.arraycopy(src, i, acc, i, j - i)
