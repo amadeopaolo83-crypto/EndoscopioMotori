@@ -35,8 +35,8 @@ android {
 }
 
 dependencies {
-    // Libreria UVC open source (Apache 2.0), su Maven Central
-    implementation("com.herohan:UVCAndroid:1.0.11")
+    // Libreria UVC open source AUSBC (Apache 2.0), via JitPack
+    implementation("com.github.jiangdongguo.AndroidUSBCamera:libausbc:3.3.3")
 
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.core:core-ktx:1.13.1")

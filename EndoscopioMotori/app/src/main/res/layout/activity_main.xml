@@ -12,18 +12,11 @@
         android:layout_height="match_parent"
         android:clipChildren="true">
 
-        <SurfaceView
+        <com.jiangdg.ausbc.widget.AspectRatioSurfaceView
             android:id="@+id/previewView"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:layout_gravity="center" />
-
-        <ImageView
-            android:id="@+id/frameView"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:scaleType="fitCenter"
-            android:visibility="gone" />
     </FrameLayout>
 
     <View
