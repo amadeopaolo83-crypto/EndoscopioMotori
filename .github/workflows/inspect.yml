@@ -5,14 +5,9 @@ jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: API
+      - name: Contenuto
         run: |
-          V=3.3.3
-          curl -sfL -o lib.aar https://jitpack.io/com/github/jiangdongguo/AndroidUSBCamera/libausbc/$V/libausbc-$V.aar
-          mkdir aar && cd aar && unzip -q ../lib.aar && unzip -o -q classes.jar -d cls
-          for n in com.jiangdg.ausbc.MultiCameraClient 'com.jiangdg.ausbc.MultiCameraClient$ICamera' com.jiangdg.ausbc.MultiCameraClient\$Companion com.jiangdg.ausbc.camera.CameraUVC com.jiangdg.ausbc.camera.bean.CameraRequest 'com.jiangdg.ausbc.camera.bean.CameraRequest$Builder' com.jiangdg.ausbc.camera.bean.PreviewSize com.jiangdg.ausbc.callback.IDeviceConnectCallBack com.jiangdg.ausbc.callback.ICameraStateCallBack 'com.jiangdg.ausbc.callback.ICameraStateCallBack$State' com.jiangdg.ausbc.callback.ICaptureCallBack com.jiangdg.ausbc.callback.IPreviewDataCallBack com.jiangdg.ausbc.widget.AspectRatioSurfaceView com.jiangdg.ausbc.widget.IAspectRatio com.jiangdg.ausbc.camera.bean.CameraUvcInfo; do
-            echo "=== $n"; javap -public -cp cls "$n" 2>&1 | head -120
-          done
-          echo "=== libuvc deps"
-          curl -sfL https://jitpack.io/com/github/jiangdongguo/AndroidUSBCamera/libuvc/$V/libuvc-$V.pom | grep -E "artifactId|version" | head
-          curl -sfL -o uvc.aar https://jitpack.io/com/github/jiangdongguo/AndroidUSBCamera/libuvc/$V/libuvc-$V.aar && mkdir u && cd u && unzip -q ../uvc.aar && ls -R . | head -40
+          B=https://jitpack.io/com/github/jiangdongguo/AndroidUSBCamera
+          curl -sfL -o a.aar $B/libausbc/3.3.3/libausbc-3.3.3.aar; unzip -l a.aar | grep -E "\.so|classes" ; unzip -q -o a.aar classes.jar -d a; unzip -l a/classes.jar | grep -c "com/jiangdg/usb/"
+          curl -sfL -o n.aar $B/libnative/3.3.3/libnative-3.3.3.aar; unzip -l n.aar | grep -E "\.so|classes"; unzip -q -o n.aar classes.jar -d n; unzip -l n/classes.jar | grep -c "com/jiangdg/usb/"
+          for v in 3.3.2 3.3.1 3.3.0 3.2.10; do echo "== $v"; for m in libausbc libuvc libnative; do curl -s -o /dev/null -w "$m %{http_code}\n" $B/$m/$v/$m-$v.pom; done; done
