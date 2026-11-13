@@ -67,6 +67,9 @@ class MainActivity : AppCompatActivity() {
     private var fpsT0 = 0L
     private var fpsVal = 0
     private var lossPct = -1
+    private var accum: ByteArray? = null
+    private var scratch: ByteArray? = null
+    @Volatile private var lastBmp: Bitmap? = null
     private var lastDecode = 0L
     private var lastInfo = 0L
     private val dbgLines = ArrayDeque<String>()
@@ -590,6 +593,7 @@ class MainActivity : AppCompatActivity() {
                 saveApiDump()
             }
         }
+        mergeFrame(buf)
         val now = SystemClock.uptimeMillis()
         fpsCount++
         if (now - fpsT0 >= 1000) {
@@ -617,18 +621,10 @@ class MainActivity : AppCompatActivity() {
                 bmp = BitmapFactory.decodeByteArray(arr, 0, len)
                 kind = "JPEG"
             } else if (w > 0 && h > 0 && len >= w * h * 2) {
-                val arr = ByteArray(w * h * 2)
-                d.get(arr)
-                var miss = 0
-                var k = 0
-                while (k + 3 < arr.size) {
-                    if (arr[k].toInt() == 0x54 && arr[k + 1].toInt() == 0x59 &&
-                        arr[k + 2].toInt() == 0x54 && arr[k + 3].toInt() == 0x4E) miss++
-                    k += 4
-                }
-                lossPct = (miss * 400L / arr.size).toInt()
+                val arr = accum ?: ByteArray(w * h * 2)
                 val px = FrameProbe.yuyvToArgb(arr, w, h)
                 bmp = Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888)
+                lastBmp = bmp
                 kind = "YUYV"
             }
             val hex = head.joinToString(" ") { "%02X".format(it) }
@@ -647,6 +643,58 @@ class MainActivity : AppCompatActivity() {
         } finally {
             frameBusy = false
         }
+    }
+
+    /**
+     * La sonda non rimanda le parti dell'immagine che non sono cambiate: la libreria le riempie
+     * con un colore fisso (54 59 54 4E). Qui quelle parti vengono ignorate e al loro posto si
+     * tiene l'immagine precedente, così l'immagine si ricompone nel tempo.
+     */
+    private fun mergeFrame(buf: java.nio.ByteBuffer) {
+        val w = previewW
+        val h = previewH
+        if (w <= 0 || h <= 0) return
+        val n = w * h * 2
+        val d = buf.duplicate()
+        d.rewind()
+        if (d.remaining() < n) return
+        var src = scratch
+        if (src == null || src.size != n) {
+            src = ByteArray(n)
+            scratch = src
+        }
+        d.get(src, 0, n)
+        if (src[0].toInt() == 0xFF.toByte().toInt() && src[1].toInt() == 0xD8.toByte().toInt()) return
+        var acc = accum
+        if (acc == null || acc.size != n) {
+            acc = ByteArray(n) { (if (it % 2 == 0) 16 else 128).toByte() }
+            accum = acc
+        }
+        var miss = 0
+        var i = 0
+        while (i + 3 < n) {
+            if (src[i].toInt() == 0x54 && src[i + 1].toInt() == 0x59 &&
+                src[i + 2].toInt() == 0x54 && src[i + 3].toInt() == 0x4E
+            ) {
+                var j = i + 4
+                while (j + 3 < n && src[j].toInt() == 0x54 && src[j + 1].toInt() == 0x59 &&
+                    src[j + 2].toInt() == 0x54 && src[j + 3].toInt() == 0x4E
+                ) j += 4
+                if ((j - i) >= 32) {
+                    miss += j - i // parte non inviata: si tiene la precedente
+                } else {
+                    System.arraycopy(src, i, acc, i, j - i)
+                }
+                i = j
+            } else {
+                acc[i] = src[i]
+                acc[i + 1] = src[i + 1]
+                acc[i + 2] = src[i + 2]
+                acc[i + 3] = src[i + 3]
+                i += 4
+            }
+        }
+        lossPct = (miss * 100L / n).toInt()
     }
 
     /** Salva i fotogrammi grezzi in Download, per poterli analizzare. */
@@ -725,6 +773,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onCameraClosed() {
+        accum = null
         runOnUiThread { frameView.visibility = View.GONE }
         if (surfaceAdded) {
             try {
@@ -851,6 +900,21 @@ class MainActivity : AppCompatActivity() {
         val rot = prefs.rotation
         val mir = prefs.mirror
         flash()
+        val merged = lastBmp
+        if (merged != null && frameView.visibility == View.VISIBLE) {
+            Thread {
+                val okSave = try {
+                    java.io.FileOutputStream(tmp).use { merged.compress(Bitmap.CompressFormat.JPEG, 100, it) }
+                } catch (_: Exception) {
+                    false
+                }
+                runOnUiThread {
+                    if (okSave) saveAsync(tmp, name, false, rot, mir)
+                    else Toast.makeText(this, R.string.msg_save_error, Toast.LENGTH_LONG).show()
+                }
+            }.start()
+            return
+        }
         try {
             CameraGlue.takePicture(h, tmp, object : CameraGlue.Done {
                 override fun ok() {
