@@ -6,6 +6,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Contenuto
+        shell: bash {0}
         run: |
           B=https://jitpack.io/com/github/jiangdongguo/AndroidUSBCamera
           curl -sfL -o a.aar $B/libausbc/3.3.3/libausbc-3.3.3.aar; unzip -l a.aar | grep -E "\.so|classes" ; unzip -q -o a.aar classes.jar -d a; unzip -l a/classes.jar | grep -c "com/jiangdg/usb/"
