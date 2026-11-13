@@ -19,6 +19,13 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.9
+      - name: Scarica librerie AUSBC
+        run: |
+          mkdir -p EndoscopioMotori/app/libs
+          git clone -q --depth 1 --branch 3.3.3 https://github.com/jiangdongguo/AndroidUSBCamera.git /tmp/ausbc
+          cp /tmp/ausbc/libnative/aar/libnative-*.aar /tmp/ausbc/libuvc/aar/libuvc-*.aar /tmp/ausbc/libuvccommon/aar/libuvccommon-*.aar EndoscopioMotori/app/libs/
+          curl -sfL -o EndoscopioMotori/app/libs/libausbc-3.3.3.aar https://jitpack.io/com/github/jiangdongguo/AndroidUSBCamera/libausbc/3.3.3/libausbc-3.3.3.aar
+          ls -la EndoscopioMotori/app/libs
       - name: Compila APK debug
         working-directory: EndoscopioMotori
         run: gradle assembleDebug --no-daemon
