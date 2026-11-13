@@ -38,6 +38,7 @@ import androidx.core.widget.doAfterTextChanged
 import com.herohan.uvcapp.CameraHelper
 import com.herohan.uvcapp.ICameraHelper
 import com.serenegiant.usb.Size
+import com.serenegiant.usb.UVCParam
 import java.io.File
 import kotlin.math.min
 
@@ -363,6 +364,23 @@ class MainActivity : AppCompatActivity() {
         emptyList()
     }
 
+    /** Con la prova "frame rate basso": copia della voce con il frame rate minimo dichiarato. */
+    private fun tuneSize(sz: Size): Size {
+        if (!prefs.optLowFps) return sz
+        return try {
+            val c = sz.clone()
+            val low = (c.fpsList ?: emptyList<Any>()).filterIsInstance<Number>().map { it.toInt() }.filter { it > 0 }.minOrNull()
+            if (low != null) {
+                val f = Size::class.java.getDeclaredField("fps")
+                f.isAccessible = true
+                f.setInt(c, low)
+            }
+            c
+        } catch (t: Throwable) {
+            sz
+        }
+    }
+
     /** Chiave salvata per una voce dell'elenco (include il formato video). */
     private fun sizeKey(sz: Size): String = sz.toString()
 
@@ -377,8 +395,20 @@ class MainActivity : AppCompatActivity() {
             val saved = prefs.resolution
             val chosen = if (saved.isEmpty()) null
             else sizeList(h).firstOrNull { sizeKey(it) == saved }
-            dbg(if (chosen != null) "open ${chosen}" else "open auto")
-            if (chosen != null) h.openCamera(chosen) else h.openCamera()
+            if (prefs.optQuirk || prefs.optLowFps) {
+                val base = chosen ?: sizeList(h).firstOrNull()
+                if (base == null) {
+                    dbg("open auto")
+                    h.openCamera()
+                } else {
+                    val t = tuneSize(base)
+                    dbg("open prova $t")
+                    if (prefs.optQuirk) h.openCamera(UVCParam(t, 128)) else h.openCamera(t)
+                }
+            } else {
+                dbg(if (chosen != null) "open ${chosen}" else "open auto")
+                if (chosen != null) h.openCamera(chosen) else h.openCamera()
+            }
         } catch (e: Exception) {
             dbg("errore open: ${e.message}")
             showStatus(R.string.err_busy) { retryConnect() }
@@ -392,9 +422,11 @@ class MainActivity : AppCompatActivity() {
             "Tasto sonda UVC",
             "Slider luminosità",
             "Config foto/video (JPG max, audio)",
-            "Anteprima adattata (ruota, specchio, zoom)"
+            "Anteprima adattata (ruota, specchio, zoom)",
+            "Banda USB ridotta (quirk)",
+            "Frame rate basso"
         )
-        val checked = booleanArrayOf(prefs.optButton, prefs.optBrightness, prefs.optConfig, prefs.optFit)
+        val checked = booleanArrayOf(prefs.optButton, prefs.optBrightness, prefs.optConfig, prefs.optFit, prefs.optQuirk, prefs.optLowFps)
         androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle("Prove diagnostiche")
             .setMultiChoiceItems(labels, checked) { _, i, on -> checked[i] = on }
@@ -403,6 +435,8 @@ class MainActivity : AppCompatActivity() {
                 prefs.optBrightness = checked[1]
                 prefs.optConfig = checked[2]
                 prefs.optFit = checked[3]
+                prefs.optQuirk = checked[4]
+                prefs.optLowFps = checked[5]
                 dbgLines.clear()
                 retryConnect()
             }
@@ -451,7 +485,7 @@ class MainActivity : AppCompatActivity() {
     private fun changeSize(h: CameraHelper, sz: Size) {
         try {
             h.stopPreview()
-            h.javaClass.getMethod("setPreviewSize", Size::class.java).invoke(h, sz)
+            h.javaClass.getMethod("setPreviewSize", Size::class.java).invoke(h, tuneSize(sz))
             h.startPreview()
             previewW = sz.width
             previewH = sz.height
@@ -638,7 +672,15 @@ class MainActivity : AppCompatActivity() {
                         sb.append("non trovata: ").append(t.javaClass.simpleName).append('\n')
                     }
                 }
-                val name = "api_libreria.txt"
+                try {
+                    val hh = helper
+                    sb.append("== SONDA\n")
+                    sb.append("formati: ").append(hh?.supportedFormatList?.toString()).append('\n')
+                    sb.append("sizes: ").append(hh?.supportedSizeList?.joinToString(" | ") { it.toString() + " fps" + it.fpsList }).append('\n')
+                } catch (t: Throwable) {
+                    sb.append("sonda errore ").append(t.javaClass.simpleName).append('\n')
+                }
+                val name = "api_libreria2.txt"
                 val cv = android.content.ContentValues().apply {
                     put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name)
                     put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain")

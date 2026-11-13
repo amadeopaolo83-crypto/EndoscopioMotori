@@ -36,6 +36,16 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("optFit", false)
         set(v) = sp.edit().putBoolean("optFit", v).apply()
 
+    /** Prova: riduce la banda USB richiesta (quirk della libreria). */
+    var optQuirk: Boolean
+        get() = sp.getBoolean("optQuirk", false)
+        set(v) = sp.edit().putBoolean("optQuirk", v).apply()
+
+    /** Prova: frame rate più basso (meno dati al secondo). */
+    var optLowFps: Boolean
+        get() = sp.getBoolean("optLowFps", false)
+        set(v) = sp.edit().putBoolean("optLowFps", v).apply()
+
     var note: String
         get() = sp.getString("note", "") ?: ""
         set(v) = sp.edit().putString("note", v).apply()
