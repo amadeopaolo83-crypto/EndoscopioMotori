@@ -5,11 +5,27 @@ jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: Contenuto
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 11
+      - name: Compila AUSBC da sorgente
         shell: bash {0}
         run: |
           git clone -q --depth 1 --branch 3.3.3 https://github.com/jiangdongguo/AndroidUSBCamera.git src
-          cd src; ls
-          for f in build.gradle settings.gradle gradle/wrapper/gradle-wrapper.properties gradle.properties libuvc/build.gradle libnative/build.gradle libausbc/build.gradle libutils/build.gradle libuvccommon/build.gradle; do echo "=== $f"; cat $f | head -80; done
-          ls libuvc libuvc/src/main libnative/src/main 2>&1 | head -40
-          echo $ANDROID_NDK_HOME $ANDROID_SDK_ROOT; ls $ANDROID_SDK_ROOT/ndk
+          cd src
+          sed -i 's/jcenter()/mavenCentral()/g' build.gradle
+          export SDK=$ANDROID_SDK_ROOT
+          yes | $SDK/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null 2>&1
+          $SDK/cmdline-tools/latest/bin/sdkmanager "ndk;21.4.7075529" "build-tools;27.0.3" "platforms;android-29" "platforms;android-31" "cmake;3.10.2.4988404" 2>&1 | tail -3
+          export NDK_HOME=$SDK/ndk/21.4.7075529
+          echo "ndk.dir=$NDK_HOME" >> local.properties
+          echo "sdk.dir=$SDK" >> local.properties
+          chmod +x gradlew
+          ./gradlew --no-daemon :libausbc:assembleRelease :libnative:assembleRelease :libuvc:assembleRelease :libuvccommon:assembleRelease 2>&1 | tail -60
+          find . -name "*.aar" | xargs ls -la
+          mkdir -p ../out && for m in libausbc libnative libuvc libuvccommon; do cp $m/build/outputs/aar/$m-release.aar ../out/ ; done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ausbc-aars
+          path: out/*.aar
