@@ -340,11 +340,18 @@ class MainActivity : AppCompatActivity() {
     /** Elenco risoluzioni senza doppioni, dalla più grande. */
     private fun sizeList(h: CameraHelper): List<Size> = try {
         (h.supportedSizeList ?: emptyList<Size>())
-            .distinctBy { it.width to it.height }
-            .sortedByDescending { it.width.toLong() * it.height }
+            .distinctBy { it.toString() }
+            .sortedWith(compareByDescending<Size> { it.width.toLong() * it.height }.thenBy { it.toString() })
     } catch (e: Exception) {
         emptyList()
     }
+
+    /** Chiave salvata per una voce dell'elenco (include il formato video). */
+    private fun sizeKey(sz: Size): String = sz.toString()
+
+    /** Formato video dichiarato dalla sonda (numero della libreria), se leggibile. */
+    private fun sizeFmt(sz: Size): String =
+        Regex("type:\\s*(\\d+)").find(sz.toString())?.groupValues?.get(1)?.let { " · formato $it" } ?: ""
 
     /** Apre alla risoluzione scelta dall'utente; se non c'è, alla predefinita della libreria. */
     private fun openCameraPreferred() {
@@ -352,8 +359,8 @@ class MainActivity : AppCompatActivity() {
         try {
             val saved = prefs.resolution
             val chosen = if (saved.isEmpty()) null
-            else sizeList(h).firstOrNull { "${it.width}x${it.height}" == saved }
-            dbg(if (chosen != null) "open ${chosen.width}x${chosen.height}" else "open auto")
+            else sizeList(h).firstOrNull { sizeKey(it) == saved }
+            dbg(if (chosen != null) "open ${chosen}" else "open auto")
             if (chosen != null) h.openCamera(chosen) else h.openCamera()
         } catch (e: Exception) {
             dbg("errore open: ${e.message}")
@@ -406,26 +413,43 @@ class MainActivity : AppCompatActivity() {
         val sizes = sizeList(h)
         val labels = ArrayList<String>()
         labels.add(getString(R.string.res_auto))
-        sizes.forEach { labels.add("${it.width} x ${it.height}") }
+        sizes.forEach { labels.add("${it.width} x ${it.height}${sizeFmt(it)}") }
         androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle(R.string.res_title)
             .setItems(labels.toTypedArray()) { _, which ->
                 if (which == 0) {
                     prefs.resolution = ""
-                    pendingDefault = true
+                    dbgLines.clear()
+                    retryConnect()
                 } else {
-                    val s = sizes[which - 1]
-                    prefs.resolution = "${s.width}x${s.height}"
-                    pendingReopen = s
-                }
-                try {
-                    h.closeCamera()
-                } catch (e: Exception) {
-                    pendingReopen = null
-                    pendingDefault = false
+                    val sz = sizes[which - 1]
+                    prefs.resolution = sizeKey(sz)
+                    changeSize(h, sz)
                 }
             }
             .show()
+    }
+
+    /** Cambia risoluzione/formato senza chiudere la sonda: stop, setPreviewSize, start. */
+    private fun changeSize(h: CameraHelper, sz: Size) {
+        try {
+            h.stopPreview()
+            h.javaClass.getMethod("setPreviewSize", Size::class.java).invoke(h, sz)
+            h.startPreview()
+            previewW = sz.width
+            previewH = sz.height
+            btnRes.text = "${sz.width}x${sz.height}${sizeFmt(sz)} ▾"
+            layoutPreview()
+            dbg("size $sz")
+        } catch (e: Throwable) {
+            dbg("errore size: ${e.message ?: e.cause?.message}")
+            pendingReopen = sz
+            try {
+                h.closeCamera()
+            } catch (_: Exception) {
+                pendingReopen = null
+            }
+        }
     }
 
     private fun onCameraOpened() {
@@ -441,10 +465,10 @@ class MainActivity : AppCompatActivity() {
         if (cur != null) {
             previewW = cur.width
             previewH = cur.height
-            btnRes.text = "${cur.width}x${cur.height} ▾"
+            btnRes.text = "${cur.width}x${cur.height}${sizeFmt(cur)} ▾"
             layoutPreview()
         }
-        dbg("preview ${previewW}x${previewH}")
+        dbg("preview $cur")
         try {
             h.startPreview()
             dbg("startPreview ok")
