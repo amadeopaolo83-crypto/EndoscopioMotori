@@ -534,7 +534,10 @@ class MainActivity : AppCompatActivity() {
                 grabLeft--
                 done = grabLeft == 0
             }
-            if (done) saveRawFrames()
+            if (done) {
+                saveRawFrames()
+                saveApiDump()
+            }
         }
         val now = SystemClock.uptimeMillis()
         if (frameBusy || now - lastDecode < 90) return
@@ -599,6 +602,51 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread { Toast.makeText(this, "Salvato in Download: $name", Toast.LENGTH_LONG).show() }
             } catch (t: Throwable) {
                 runOnUiThread { Toast.makeText(this, "Errore salvataggio: ${t.message}", Toast.LENGTH_LONG).show() }
+            }
+        }.start()
+    }
+
+    /** Elenco funzioni della libreria (per sapere quali regolazioni di banda esistono). */
+    private fun saveApiDump() {
+        Thread {
+            try {
+                val sb = StringBuilder()
+                val names = listOf(
+                    "com.serenegiant.usb.UVCParam", "com.herohan.uvcapp.CameraHelper",
+                    "com.herohan.uvcapp.ICameraHelper", "com.serenegiant.usb.Size",
+                    "com.serenegiant.usb.UVCCamera"
+                )
+                for (n in names) {
+                    sb.append("== ").append(n).append('\n')
+                    try {
+                        val c = Class.forName(n)
+                        c.declaredFields.forEach {
+                            sb.append("F ").append(it.type.simpleName).append(' ').append(it.name)
+                            if (java.lang.reflect.Modifier.isStatic(it.modifiers) && it.type == Int::class.javaPrimitiveType) {
+                                try {
+                                    it.isAccessible = true
+                                    sb.append(" = ").append(it.getInt(null))
+                                } catch (_: Throwable) {
+                                }
+                            }
+                            sb.append('\n')
+                        }
+                        c.constructors.forEach { sb.append("C ").append(it.toString()).append('\n') }
+                        c.methods.filter { it.declaringClass != Any::class.java }
+                            .forEach { sb.append("M ").append(it.toString()).append('\n') }
+                    } catch (t: Throwable) {
+                        sb.append("non trovata: ").append(t.javaClass.simpleName).append('\n')
+                    }
+                }
+                val name = "api_libreria.txt"
+                val cv = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name)
+                    put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+                    put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "Download")
+                }
+                val uri = contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv)
+                if (uri != null) contentResolver.openOutputStream(uri)?.use { it.write(sb.toString().toByteArray()) }
+            } catch (_: Throwable) {
             }
         }.start()
     }
