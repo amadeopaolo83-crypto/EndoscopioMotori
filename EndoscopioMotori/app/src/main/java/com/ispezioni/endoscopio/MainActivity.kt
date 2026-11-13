@@ -373,32 +373,34 @@ class MainActivity : AppCompatActivity() {
         emptyList()
     }
 
-    /** Con la prova "frame rate basso": copia della voce con il frame rate minimo dichiarato. */
+    /** Con la prova "frame rate basso": voce con il frame rate minimo dichiarato (costruita da zero). */
     private fun tuneSize(sz: Size): Size {
         if (!prefs.optLowFps) return sz
         return try {
-            val c = sz.clone()
-            val low = (c.fpsList ?: emptyList<Any>()).filterIsInstance<Number>().map { it.toInt() }.filter { it > 0 }.minOrNull()
-            if (low != null) {
-                val f = Size::class.java.getDeclaredField("fps")
-                f.isAccessible = true
-                f.setInt(c, low)
+            val low = (sz.fpsList ?: emptyList<Any>()).filterIsInstance<Number>().map { it.toInt() }.filter { it > 0 }.minOrNull()
+                ?: return sz
+            val ctor = Size::class.java.constructors.first { it.parameterTypes.size == 5 }
+            val vals = listOf(sz.type, sz.width, sz.height, low)
+            var found: Size? = null
+            fun perm(cur: List<Int>, rest: List<Int>) {
+                if (found != null) return
+                if (rest.isEmpty()) {
+                    try {
+                        val c = ctor.newInstance(cur[0], cur[1], cur[2], cur[3], sz.fpsList) as Size
+                        if (c.width == sz.width && c.height == sz.height && c.fps == low && c.type == sz.type) found = c
+                    } catch (_: Throwable) {
+                    }
+                    return
+                }
+                for (i in rest.indices) perm(cur + rest[i], rest.filterIndexed { j, _ -> j != i })
             }
-            c
+            perm(emptyList(), vals)
+            dbg(if (found != null) "fps forzato a $low" else "fps NON forzabile")
+            found ?: sz
         } catch (t: Throwable) {
+            dbg("tune errore ${t.javaClass.simpleName}")
             sz
         }
-    }
-
-    /** Camere che Android stesso vede (0 dietro, 1 davanti, 2 esterna/USB). */
-    private fun sysCams(): String = try {
-        val cm = getSystemService(android.content.Context.CAMERA_SERVICE) as android.hardware.camera2.CameraManager
-        "camere sistema: " + cm.cameraIdList.joinToString(" ") { id ->
-            val f = cm.getCameraCharacteristics(id).get(android.hardware.camera2.CameraCharacteristics.LENS_FACING)
-            "$id:${when (f) { 0 -> "front"; 1 -> "back"; 2 -> "EXT"; else -> "?" }}"
-        }
-    } catch (t: Throwable) {
-        "camere sistema: errore ${t.javaClass.simpleName}"
     }
 
     /** Chiave salvata per una voce dell'elenco (include il formato video). */
