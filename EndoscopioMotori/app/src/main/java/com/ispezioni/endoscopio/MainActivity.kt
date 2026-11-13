@@ -63,6 +63,10 @@ class MainActivity : AppCompatActivity() {
     @Volatile private var frameBusy = false
     private val grabbed = ArrayList<ByteArray>()
     @Volatile private var grabLeft = 0
+    private var fpsCount = 0
+    private var fpsT0 = 0L
+    private var fpsVal = 0
+    private var lossPct = -1
     private var lastDecode = 0L
     private var lastInfo = 0L
     private val dbgLines = ArrayDeque<String>()
@@ -574,6 +578,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
         val now = SystemClock.uptimeMillis()
+        fpsCount++
+        if (now - fpsT0 >= 1000) {
+            fpsVal = (fpsCount * 1000L / (now - fpsT0).coerceAtLeast(1)).toInt()
+            fpsCount = 0
+            fpsT0 = now
+        }
         if (frameBusy || now - lastDecode < 90) return
         frameBusy = true
         lastDecode = now
@@ -596,6 +606,14 @@ class MainActivity : AppCompatActivity() {
             } else if (w > 0 && h > 0 && len >= w * h * 2) {
                 val arr = ByteArray(w * h * 2)
                 d.get(arr)
+                var miss = 0
+                var k = 0
+                while (k + 3 < arr.size) {
+                    if (arr[k].toInt() == 0x54 && arr[k + 1].toInt() == 0x59 &&
+                        arr[k + 2].toInt() == 0x54 && arr[k + 3].toInt() == 0x4E) miss++
+                    k += 4
+                }
+                lossPct = (miss * 400L / arr.size).toInt()
                 val px = FrameProbe.yuyvToArgb(arr, w, h)
                 bmp = Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888)
                 kind = "YUYV"
@@ -605,7 +623,7 @@ class MainActivity : AppCompatActivity() {
             if (showInfo) lastInfo = now
             val b = bmp
             runOnUiThread {
-                if (showInfo) lastKeyText.text = "Frame $kind $len B · $hex"
+                if (showInfo) lastKeyText.text = "Frame $kind · $fpsVal fps · persi $lossPct%"
                 if (b != null) {
                     frameView.setImageBitmap(b)
                     frameView.visibility = View.VISIBLE
