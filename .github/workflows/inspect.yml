@@ -1,0 +1,14 @@
+name: Inspect library
+on:
+  workflow_dispatch:
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Contenuto
+        shell: bash {0}
+        run: |
+          B=https://jitpack.io/com/github/jiangdongguo/AndroidUSBCamera
+          for v in 3.3.3 3.2.10; do echo "== $v"; curl -s https://jitpack.io/api/builds/com.github.jiangdongguo/AndroidUSBCamera/$v | head -c 1500; echo; done
+          echo "== log"; curl -s https://jitpack.io/com/github/jiangdongguo/AndroidUSBCamera/3.3.3/build.log | tail -40
+          for m in libuvc libnative libausbc; do echo "== dir $m"; curl -s $B/$m/ | head -c 600; done
