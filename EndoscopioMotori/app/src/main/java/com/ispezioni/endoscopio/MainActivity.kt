@@ -60,6 +60,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var debugText: TextView
     private lateinit var frameView: ImageView
     @Volatile private var frameBusy = false
+    private val grabbed = ArrayList<ByteArray>()
+    @Volatile private var grabLeft = 0
     private var lastDecode = 0L
     private var lastInfo = 0L
     private val dbgLines = ArrayDeque<String>()
@@ -121,6 +123,13 @@ class MainActivity : AppCompatActivity() {
         btnRes = findViewById(R.id.btnRes)
         debugText = findViewById(R.id.debugText)
         frameView = findViewById(R.id.frameView)
+        lastKeyText.setOnClickListener {
+            if (cameraOpened) {
+                synchronized(grabbed) { grabbed.clear() }
+                grabLeft = 4
+                Toast.makeText(this, "Salvo 4 fotogrammi grezzi…", Toast.LENGTH_SHORT).show()
+            }
+        }
         btnRes.setOnClickListener { showResolutionDialog() }
         debugText.setOnClickListener { showDiagnostics() }
 
@@ -514,6 +523,19 @@ class MainActivity : AppCompatActivity() {
 
     /** Fotogramma grezzo: mostra cosa arriva (JPEG o YUYV) e, se leggibile, lo disegna da sé. */
     private fun onRawFrame(buf: java.nio.ByteBuffer) {
+        if (grabLeft > 0) {
+            val g = buf.duplicate()
+            g.rewind()
+            val arr = ByteArray(g.remaining())
+            g.get(arr)
+            var done = false
+            synchronized(grabbed) {
+                grabbed.add(arr)
+                grabLeft--
+                done = grabLeft == 0
+            }
+            if (done) saveRawFrames()
+        }
         val now = SystemClock.uptimeMillis()
         if (frameBusy || now - lastDecode < 90) return
         frameBusy = true
@@ -557,6 +579,28 @@ class MainActivity : AppCompatActivity() {
         } finally {
             frameBusy = false
         }
+    }
+
+    /** Salva i fotogrammi grezzi in Download, per poterli analizzare. */
+    private fun saveRawFrames() {
+        Thread {
+            try {
+                val list = synchronized(grabbed) { ArrayList(grabbed) }
+                val name = "frames_${previewW}x${previewH}_" +
+                    java.text.SimpleDateFormat("HHmmss", java.util.Locale.US).format(java.util.Date()) + ".raw"
+                val cv = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name)
+                    put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "application/octet-stream")
+                    put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "Download")
+                }
+                val uri = contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv)
+                    ?: throw IllegalStateException("insert")
+                contentResolver.openOutputStream(uri)?.use { o -> list.forEach { o.write(it) } }
+                runOnUiThread { Toast.makeText(this, "Salvato in Download: $name", Toast.LENGTH_LONG).show() }
+            } catch (t: Throwable) {
+                runOnUiThread { Toast.makeText(this, "Errore salvataggio: ${t.message}", Toast.LENGTH_LONG).show() }
+            }
+        }.start()
     }
 
     private fun onCameraClosed() {
