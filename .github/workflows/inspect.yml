@@ -8,7 +8,8 @@ jobs:
       - name: Contenuto
         shell: bash {0}
         run: |
-          B=https://jitpack.io/com/github/jiangdongguo/AndroidUSBCamera
-          for v in 3.3.3 3.2.10; do echo "== $v"; curl -s https://jitpack.io/api/builds/com.github.jiangdongguo/AndroidUSBCamera/$v | head -c 1500; echo; done
-          echo "== log"; curl -s https://jitpack.io/com/github/jiangdongguo/AndroidUSBCamera/3.3.3/build.log | tail -40
-          for m in libuvc libnative libausbc; do echo "== dir $m"; curl -s $B/$m/ | head -c 600; done
+          git clone -q --depth 1 --branch 3.3.3 https://github.com/jiangdongguo/AndroidUSBCamera.git src
+          cd src; ls
+          for f in build.gradle settings.gradle gradle/wrapper/gradle-wrapper.properties gradle.properties libuvc/build.gradle libnative/build.gradle libausbc/build.gradle libutils/build.gradle libuvccommon/build.gradle; do echo "=== $f"; cat $f | head -80; done
+          ls libuvc libuvc/src/main libnative/src/main 2>&1 | head -40
+          echo $ANDROID_NDK_HOME $ANDROID_SDK_ROOT; ls $ANDROID_SDK_ROOT/ndk
