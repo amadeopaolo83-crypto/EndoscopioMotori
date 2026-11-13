@@ -403,6 +403,17 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Camere che Android stesso vede (0 dietro, 1 davanti, 2 esterna/USB). */
+    private fun sysCams(): String = try {
+        val cm = getSystemService(android.content.Context.CAMERA_SERVICE) as android.hardware.camera2.CameraManager
+        "camere sistema: " + cm.cameraIdList.joinToString(" ") { id ->
+            val f = cm.getCameraCharacteristics(id).get(android.hardware.camera2.CameraCharacteristics.LENS_FACING)
+            "$id:${when (f) { 0 -> "front"; 1 -> "back"; 2 -> "EXT"; else -> "?" }}"
+        }
+    } catch (t: Throwable) {
+        "camere sistema: errore ${t.javaClass.simpleName}"
+    }
+
     /** Chiave salvata per una voce dell'elenco (include il formato video). */
     private fun sizeKey(sz: Size): String = sz.toString()
 
