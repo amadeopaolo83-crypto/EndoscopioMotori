@@ -99,6 +99,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        installCrashLogger()
         setContentView(R.layout.activity_main)
         prefs = Prefs(this)
 
@@ -193,6 +194,28 @@ class MainActivity : AppCompatActivity() {
         super.onStart()
         ui.removeCallbacks(killRunnable)
         ensurePermissionsThenStart()
+    }
+
+    /** Se l'app va in crash scrive l'errore in Download/crash_endoscopio.txt (per poterlo analizzare). */
+    private fun installCrashLogger() {
+        val prev = Thread.getDefaultUncaughtExceptionHandler()
+        val ctx = applicationContext
+        Thread.setDefaultUncaughtExceptionHandler { t, e ->
+            try {
+                val cv = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME,
+                        "crash_endoscopio_" + System.currentTimeMillis() % 100000 + ".txt")
+                    put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+                    put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "Download")
+                }
+                val uri = ctx.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv)
+                if (uri != null) ctx.contentResolver.openOutputStream(uri)?.use {
+                    it.write(("thread=" + t.name + "\n" + android.util.Log.getStackTraceString(e)).toByteArray())
+                }
+            } catch (_: Throwable) {
+            }
+            prev?.uncaughtException(t, e)
+        }
     }
 
     private val killRunnable = Runnable {
