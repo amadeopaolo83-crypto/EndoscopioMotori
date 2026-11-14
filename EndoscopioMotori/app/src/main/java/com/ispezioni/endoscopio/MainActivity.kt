@@ -37,7 +37,7 @@ import com.jiangdg.ausbc.callback.IPreviewDataCallBack
 import com.jiangdg.ausbc.camera.CameraUVC
 import com.jiangdg.ausbc.camera.bean.CameraRequest
 import com.jiangdg.ausbc.camera.bean.PreviewSize
-import android.view.TextureView
+import com.jiangdg.ausbc.widget.AspectRatioSurfaceView
 import com.jiangdg.usb.USBMonitor
 import java.io.File
 import kotlin.math.min
@@ -46,7 +46,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var prefs: Prefs
     private lateinit var container: FrameLayout
-    private lateinit var previewView: TextureView
+    private lateinit var previewView: AspectRatioSurfaceView
     private lateinit var statusText: TextView
     private lateinit var noteInput: EditText
     private lateinit var btnRotate: Button
@@ -134,11 +134,12 @@ class MainActivity : AppCompatActivity() {
             prefs.rotation = (prefs.rotation + 90) % 360
             updateRotateMirrorLabels()
             layoutPreview()
+            applyLibRotation()
         }
         btnMirror.setOnClickListener {
             prefs.mirror = !prefs.mirror
             updateRotateMirrorLabels()
-            applyTransform()
+            applyLibRotation()
         }
         findViewById<Button>(R.id.btnPhoto).setOnClickListener { takePhoto() }
         btnRec.setOnClickListener { if (recording) stopRec() else startRec() }
@@ -443,6 +444,7 @@ class MainActivity : AppCompatActivity() {
         btnRes.text = "${previewW}x${previewH} ▾"
         layoutPreview()
         hideStatus()
+        applyLibRotation()
         try {
             cam.addPreviewDataCallBack(object : IPreviewDataCallBack {
                 override fun onPreviewData(data: ByteArray?, width: Int, height: Int, format: IPreviewDataCallBack.DataFormat) {
@@ -516,10 +518,11 @@ class MainActivity : AppCompatActivity() {
         val ch = container.height
         if (cw == 0 || ch == 0 || previewW == 0 || previewH == 0) return
         val odd = prefs.rotation == 90 || prefs.rotation == 270
-        val s = if (odd) min(cw.toFloat() / previewH, ch.toFloat() / previewW)
-        else min(cw.toFloat() / previewW, ch.toFloat() / previewH)
-        val vw = (previewW * s).toInt()
-        val vh = (previewH * s).toInt()
+        val iw = if (odd) previewH else previewW
+        val ih = if (odd) previewW else previewH
+        val s = min(cw.toFloat() / iw, ch.toFloat() / ih)
+        val vw = (iw * s).toInt()
+        val vh = (ih * s).toInt()
         val lp = previewView.layoutParams as FrameLayout.LayoutParams
         // niente nuovo layout se la misura non cambia (evita cicli continui di layout)
         if (lp.width != vw || lp.height != vh || lp.gravity != Gravity.CENTER) {
@@ -531,10 +534,32 @@ class MainActivity : AppCompatActivity() {
         applyTransform()
     }
 
+    /** Solo zoom: rotazione e specchio le fa la libreria (applyLibRotation). */
     private fun applyTransform() {
-        previewView.rotation = prefs.rotation.toFloat()
-        previewView.scaleX = zoom * (if (prefs.mirror) -1f else 1f)
+        previewView.scaleX = zoom
         previewView.scaleY = zoom
+    }
+
+    /** Rotazione/specchio dentro la libreria (disegno OpenGL), scelti per nome per sicurezza. */
+    private fun applyLibRotation() {
+        val cam = camera ?: return
+        try {
+            val cls = Class.forName("com.jiangdg.ausbc.render.env.RotateType")
+            val all = cls.enumConstants!!.map { it as Enum<*> }
+            val rot = prefs.rotation
+            val want = when {
+                prefs.mirror && rot == 0 -> "FLIP_LEFT_RIGHT"
+                prefs.mirror && rot == 180 -> "FLIP_UP_DOWN"
+                else -> "ANGLE_$rot"
+            }
+            val c = all.firstOrNull { it.name == want } ?: all.firstOrNull { it.name == "ANGLE_$rot" }
+            if (c != null) {
+                cam.javaClass.getMethod("setRotateType", cls).invoke(cam, c)
+                dbg("rot ${c.name}")
+            } else dbg("rot? " + all.joinToString(",") { it.name })
+        } catch (t: Throwable) {
+            dbg("rot errore ${t.javaClass.simpleName}")
+        }
     }
 
     // ---------------------------------------------------------------- foto
@@ -564,7 +589,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 override fun onComplete(path: String?) {
-                    runOnUiThread { saveAsync(tmp, name, false, rot, mir) }
+                    runOnUiThread { saveAsync(tmp, name, false, 0, false) }
                 }
             }, tmp.absolutePath)
         } catch (e: Throwable) {

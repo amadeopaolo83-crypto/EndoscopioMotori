@@ -12,7 +12,7 @@
         android:layout_height="match_parent"
         android:clipChildren="true">
 
-        <TextureView
+        <com.jiangdg.ausbc.widget.AspectRatioSurfaceView
             android:id="@+id/previewView"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
