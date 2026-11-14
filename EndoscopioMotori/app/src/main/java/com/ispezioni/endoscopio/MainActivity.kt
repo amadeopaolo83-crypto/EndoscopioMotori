@@ -231,7 +231,7 @@ class MainActivity : AppCompatActivity() {
     private fun initHelper() {
         if (client != null) return
         showStatus(R.string.status_connect)
-        val c = MultiCameraClient(this, object : IDeviceConnectCallBack {
+        val c = MultiCameraClient(SafeContext(this), object : IDeviceConnectCallBack {
             override fun onAttachDev(device: UsbDevice?) {
                 runOnUiThread {
                     dbg("attach")
