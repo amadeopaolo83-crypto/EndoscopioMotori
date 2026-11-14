@@ -428,9 +428,25 @@ class MainActivity : AppCompatActivity() {
                 previewW = sz.width
                 previewH = sz.height
                 btnRes.text = "${sz.width}x${sz.height} ▾"
-                retryConnect()
+                restartApp()
             }
             .show()
+    }
+
+    /** Riavvio pulito dell'app (la libreria USB non regge il cambio al volo). */
+    private fun restartApp() {
+        Toast.makeText(this, "Applico la risoluzione…", Toast.LENGTH_SHORT).show()
+        try {
+            releaseHelper()
+        } catch (_: Throwable) {
+        }
+        val i = packageManager.getLaunchIntentForPackage(packageName)!!
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        ui.postDelayed({
+            startActivity(i)
+            finishAffinity()
+            Runtime.getRuntime().exit(0)
+        }, 700)
     }
 
     private fun onCameraOpened() {
