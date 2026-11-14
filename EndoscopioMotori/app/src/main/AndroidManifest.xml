@@ -38,6 +38,7 @@
 
         <activity
             android:name=".GalleryActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:process=":gallery" />
     </application>
 </manifest>

@@ -191,13 +191,21 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        ui.removeCallbacks(killRunnable)
         ensurePermissionsThenStart()
     }
 
+    private val killRunnable = Runnable {
+        // chiusura pulita: la libreria USB non regge una seconda apertura nello stesso processo
+        android.os.Process.killProcess(android.os.Process.myPid())
+    }
+
     override fun onStop() {
-        if (recording) stopRec()
-        releaseHelper()
+        val wasRec = recording
+        if (wasRec) stopRec()
         super.onStop()
+        ui.removeCallbacks(killRunnable)
+        ui.postDelayed(killRunnable, if (wasRec) 5000L else 400L)
     }
 
     // ---------------------------------------------------------------- permessi
