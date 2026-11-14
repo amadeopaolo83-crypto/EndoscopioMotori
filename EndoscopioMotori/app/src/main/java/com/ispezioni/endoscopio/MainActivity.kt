@@ -37,7 +37,7 @@ import com.jiangdg.ausbc.callback.IPreviewDataCallBack
 import com.jiangdg.ausbc.camera.CameraUVC
 import com.jiangdg.ausbc.camera.bean.CameraRequest
 import com.jiangdg.ausbc.camera.bean.PreviewSize
-import com.jiangdg.ausbc.widget.AspectRatioSurfaceView
+import android.view.TextureView
 import com.jiangdg.usb.USBMonitor
 import java.io.File
 import kotlin.math.min
@@ -46,7 +46,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var prefs: Prefs
     private lateinit var container: FrameLayout
-    private lateinit var previewView: AspectRatioSurfaceView
+    private lateinit var previewView: TextureView
     private lateinit var statusText: TextView
     private lateinit var noteInput: EditText
     private lateinit var btnRotate: Button
