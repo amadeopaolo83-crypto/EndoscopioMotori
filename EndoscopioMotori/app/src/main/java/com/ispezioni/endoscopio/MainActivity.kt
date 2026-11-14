@@ -162,6 +162,27 @@ class MainActivity : AppCompatActivity() {
             override fun onStopTrackingTouch(sb: SeekBar?) {}
         })
 
+        previewView.holder.addCallback(object : android.view.SurfaceHolder.Callback {
+            override fun surfaceCreated(holder: android.view.SurfaceHolder) {
+                val p = pendingOpen
+                pendingOpen = null
+                if (p != null) openCam(p.first, p.second)
+            }
+
+            override fun surfaceChanged(holder: android.view.SurfaceHolder, format: Int, w: Int, h: Int) {}
+
+            override fun surfaceDestroyed(holder: android.view.SurfaceHolder) {
+                // senza superficie il disegno OpenGL della libreria va in crash: ferma tutto subito
+                if (!recording) {
+                    android.os.Process.killProcess(android.os.Process.myPid())
+                } else {
+                    try {
+                        camera?.closeCamera()
+                    } catch (_: Throwable) {
+                    }
+                }
+            }
+        })
         container.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> layoutPreview() }
 
         // Zoom digitale con pizzico; doppio tocco = azzera
@@ -350,7 +371,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private var pendingOpen: Pair<UsbDevice, USBMonitor.UsbControlBlock>? = null
+
     private fun openCam(device: UsbDevice, ctrl: USBMonitor.UsbControlBlock) {
+        if (!previewView.holder.surface.isValid) {
+            pendingOpen = device to ctrl
+            return
+        }
         try {
             camera?.closeCamera()
         } catch (_: Throwable) {
