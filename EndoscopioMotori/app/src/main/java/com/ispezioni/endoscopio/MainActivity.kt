@@ -3,6 +3,7 @@ package com.ispezioni.endoscopio
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.hardware.usb.UsbDevice
 import android.net.Uri
 import android.os.Build
