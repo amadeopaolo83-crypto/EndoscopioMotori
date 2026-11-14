@@ -427,12 +427,7 @@ class MainActivity : AppCompatActivity() {
                 previewW = sz.width
                 previewH = sz.height
                 btnRes.text = "${sz.width}x${sz.height} ▾"
-                try {
-                    cam.updateResolution(sz.width, sz.height)
-                } catch (e: Throwable) {
-                    dbg("errore size: ${e.message}")
-                }
-                layoutPreview()
+                retryConnect()
             }
             .show()
     }
@@ -445,21 +440,6 @@ class MainActivity : AppCompatActivity() {
         layoutPreview()
         hideStatus()
         applyLibRotation()
-        try {
-            cam.addPreviewDataCallBack(object : IPreviewDataCallBack {
-                override fun onPreviewData(data: ByteArray?, width: Int, height: Int, format: IPreviewDataCallBack.DataFormat) {
-                    val now = SystemClock.uptimeMillis()
-                    fpsCount++
-                    if (now - fpsT0 >= 1000) {
-                        val f = (fpsCount * 1000L / (now - fpsT0).coerceAtLeast(1)).toInt()
-                        fpsCount = 0
-                        fpsT0 = now
-                        runOnUiThread { lastKeyText.text = "Anteprima ${width}x$height · $f fps" }
-                    }
-                }
-            })
-        } catch (_: Throwable) {
-        }
         lastKeyText.text = getString(R.string.key_only_keyboard)
 
         // slider luminosita', solo se la sonda espone il controllo
@@ -565,8 +545,7 @@ class MainActivity : AppCompatActivity() {
     // ---------------------------------------------------------------- foto
 
     private fun takePhoto() {
-        val cam = camera
-        if (cam == null || !cameraOpened) {
+        if (camera == null || !cameraOpened) {
             Toast.makeText(this, R.string.msg_not_ready, Toast.LENGTH_SHORT).show()
             return
         }
@@ -576,22 +555,29 @@ class MainActivity : AppCompatActivity() {
 
         val tmp = File(cacheDir, "photo_${System.currentTimeMillis()}.jpg")
         val name = MediaRepo.buildName(noteInput.text.toString(), "jpg")
-        val rot = prefs.rotation
-        val mir = prefs.mirror
+        val w = previewView.width
+        val h = previewView.height
+        if (w <= 0 || h <= 0) return
         flash()
         try {
-            cam.captureImage(object : ICaptureCallBack {
-                override fun onBegin() {}
-                override fun onError(error: String?) {
-                    runOnUiThread {
-                        Toast.makeText(this@MainActivity, getString(R.string.msg_photo_error, error ?: "?"), Toast.LENGTH_LONG).show()
-                    }
+            val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            android.view.PixelCopy.request(previewView, bmp, { res ->
+                if (res == android.view.PixelCopy.SUCCESS) {
+                    Thread {
+                        val okSave = try {
+                            java.io.FileOutputStream(tmp).use { bmp.compress(Bitmap.CompressFormat.JPEG, 100, it) }
+                        } catch (_: Throwable) {
+                            false
+                        }
+                        runOnUiThread {
+                            if (okSave) saveAsync(tmp, name, false, 0, false)
+                            else Toast.makeText(this, R.string.msg_save_error, Toast.LENGTH_LONG).show()
+                        }
+                    }.start()
+                } else {
+                    Toast.makeText(this, getString(R.string.msg_photo_error, "copia $res"), Toast.LENGTH_LONG).show()
                 }
-
-                override fun onComplete(path: String?) {
-                    runOnUiThread { saveAsync(tmp, name, false, 0, false) }
-                }
-            }, tmp.absolutePath)
+            }, ui)
         } catch (e: Throwable) {
             Toast.makeText(this, getString(R.string.msg_photo_error, e.message ?: "?"), Toast.LENGTH_LONG).show()
         }
@@ -626,6 +612,16 @@ class MainActivity : AppCompatActivity() {
 
     // ---------------------------------------------------------------- video
 
+    private var recorder: FrameRecorder? = null
+    private var recFile: File? = null
+    private var recName = ""
+    private val recCallback = object : IPreviewDataCallBack {
+        override fun onPreviewData(data: ByteArray?, width: Int, height: Int, format: IPreviewDataCallBack.DataFormat) {
+            if (data == null) return
+            recorder?.feed(data, width, height, format.name.contains("RGB", true))
+        }
+    }
+
     private fun startRec() {
         val cam = camera
         if (cam == null || !cameraOpened) {
@@ -633,31 +629,17 @@ class MainActivity : AppCompatActivity() {
             return
         }
         val tmp = File(cacheDir, "rec_${System.currentTimeMillis()}.mp4")
-        val name = MediaRepo.buildName(noteInput.text.toString(), "mp4")
+        recFile = tmp
+        recName = MediaRepo.buildName(noteInput.text.toString(), "mp4")
+        recorder = FrameRecorder(tmp.absolutePath, 0)
         try {
-            cam.captureVideoStart(object : ICaptureCallBack {
-                override fun onBegin() {}
-                override fun onError(error: String?) {
-                    runOnUiThread {
-                        if (recording) {
-                            recording = false
-                            ui.removeCallbacks(timerRunnable)
-                            updateRecUi()
-                        }
-                        tmp.delete()
-                        Toast.makeText(this@MainActivity, getString(R.string.msg_rec_error, error ?: "?"), Toast.LENGTH_LONG).show()
-                    }
-                }
-
-                override fun onComplete(path: String?) {
-                    runOnUiThread { saveAsync(tmp, name, true, 0, false) }
-                }
-            }, tmp.absolutePath, 0L)
+            cam.addPreviewDataCallBack(recCallback)
             recording = true
             recStart = SystemClock.elapsedRealtime()
             ui.post(timerRunnable)
             updateRecUi()
         } catch (e: Throwable) {
+            recorder = null
             Toast.makeText(this, getString(R.string.msg_rec_error, e.message ?: "?"), Toast.LENGTH_LONG).show()
         }
     }
@@ -667,9 +649,24 @@ class MainActivity : AppCompatActivity() {
         ui.removeCallbacks(timerRunnable)
         updateRecUi()
         try {
-            camera?.captureVideoStop()
+            camera?.removePreviewDataCallBack(recCallback)
         } catch (_: Throwable) {
         }
+        val r = recorder
+        val f = recFile
+        val name = recName
+        recorder = null
+        if (r == null || f == null) return
+        Thread {
+            val ok = r.finish()
+            runOnUiThread {
+                if (ok) saveAsync(f, name, true, 0, false)
+                else {
+                    f.delete()
+                    Toast.makeText(this, getString(R.string.msg_rec_error, r.error ?: "nessun fotogramma"), Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
     }
 
     private fun updateRecUi() {
