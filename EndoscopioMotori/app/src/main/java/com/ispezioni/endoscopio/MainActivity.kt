@@ -116,7 +116,7 @@ class MainActivity : AppCompatActivity() {
         flashView = findViewById(R.id.flashView)
         btnRes = findViewById(R.id.btnRes)
         debugText = findViewById(R.id.debugText)
-        btnRes.setOnClickListener { showResolutionDialog() }
+        btnRes.visibility = View.GONE
         debugText.setOnClickListener { dumpUsb() }
 
         noteInput.setText(prefs.note)
@@ -341,9 +341,8 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         })
-        val saved = prefs.resolution.split("x")
-        val w = saved.getOrNull(0)?.toIntOrNull() ?: 640
-        val h = saved.getOrNull(1)?.toIntOrNull() ?: 480
+        val w = 640
+        val h = 480
         previewW = w
         previewH = h
         layoutPreview()
@@ -453,7 +452,6 @@ class MainActivity : AppCompatActivity() {
         val cam = camera ?: return
         ui.removeCallbacks(openWatchdog)
         cameraOpened = true
-        btnRes.text = "${previewW}x${previewH} ▾"
         layoutPreview()
         hideStatus()
         applyLibRotation()
