@@ -117,7 +117,7 @@ class MainActivity : AppCompatActivity() {
         btnRes = findViewById(R.id.btnRes)
         debugText = findViewById(R.id.debugText)
         btnRes.visibility = View.GONE
-        debugText.setOnClickListener { dumpUsb() }
+        debugText.visibility = View.GONE
 
         noteInput.setText(prefs.note)
         noteInput.doAfterTextChanged { prefs.note = it?.toString() ?: "" }
